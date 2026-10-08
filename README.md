@@ -7,7 +7,7 @@ SD WebUI 中文标签补全扩展：在提示词框里**直接打中文**，弹�
 - 角色、作品支持译名、简称和社区昵称，例如 `saber_(fate)` ← 吾王 / 呆毛王 / 骑士王
 - 适用于 A1111 系 WebUI：Stable Diffusion WebUI、Forge、Forge Neo
 
-字典数据与制作脚本见 [danbooru-zh-dict](https://github.com/YOUR_GITHUB_USERNAME/danbooru-zh-dict)。
+字典数据与制作脚本见 [danbooru-zh-dict](https://github.com/wangjue520/danbooru-zh-dict)。
 
 ---
 
@@ -16,14 +16,14 @@ SD WebUI 中文标签补全扩展：在提示词框里**直接打中文**，弹�
 **方式一：从网址安装（推荐）**
 
 1. WebUI →「扩展 Extensions」→「从网址安装 Install from URL」
-2. 填入 `https://github.com/YOUR_GITHUB_USERNAME/sd-webui-zh-tag-autocomplete`，点「安装」
+2. 填入 `https://github.com/wangjue520/sd-webui-zh-tag-autocomplete`，点「安装」
 3. 回到「已安装」页点「应用并重启 UI」，或直接重启 WebUI
 
 **方式二：git**
 
 ```bash
 cd stable-diffusion-webui/extensions
-git clone https://github.com/YOUR_GITHUB_USERNAME/sd-webui-zh-tag-autocomplete
+git clone https://github.com/wangjue520/sd-webui-zh-tag-autocomplete
 ```
 
 **方式三：压缩包**
@@ -140,7 +140,7 @@ black thighhighs, twintails, (hatsune miku:1.2), artoria pendragon \(fate\), <lo
 把设置里的「输入英文时也弹出补全」设为「自动」或「关闭」。
 
 **翻译不准 / 想加自己的叫法**
-字典由大模型辅助生成，热门标签经过抽查，冷门角色可能有错。欢迎到 [danbooru-zh-dict](https://github.com/YOUR_GITHUB_USERNAME/danbooru-zh-dict) 提 issue 或 PR。
+字典由大模型辅助生成，热门标签经过抽查，冷门角色可能有错。欢迎到 [danbooru-zh-dict](https://github.com/wangjue520/danbooru-zh-dict) 提 issue 或 PR。
 
 ---
 
