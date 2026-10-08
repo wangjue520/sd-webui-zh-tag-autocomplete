@@ -1,0 +1,117 @@
+#zhtac-popup {
+    position: absolute;
+    z-index: 10000;
+    display: none;
+    min-width: 320px;
+    max-width: 640px;
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 4px 0;
+    background: var(--background-fill-primary, #fff);
+    color: var(--body-text-color, #222);
+    border: 1px solid var(--border-color-primary, #ccc);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+    font-size: 14px;
+}
+
+.zhtac-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.zhtac-item:hover,
+.zhtac-active {
+    background: var(--background-fill-secondary, #eef2ff);
+}
+
+.zhtac-active {
+    outline: 1px solid var(--color-accent, #6366f1);
+    outline-offset: -1px;
+}
+
+.zhtac-cat {
+    flex: none;
+    min-width: 2.6em;
+    padding: 0 4px;
+    border-radius: 4px;
+    font-size: 11px;
+    text-align: center;
+    color: #fff;
+}
+
+.zhtac-cat-0 { background: #3b82f6; }
+.zhtac-cat-1 { background: #ef4444; }
+.zhtac-cat-3 { background: #a855f7; }
+.zhtac-cat-4 { background: #16a34a; }
+.zhtac-cat-5 { background: #ea8a0c; }
+
+.zhtac-tag {
+    font-family: ui-monospace, Consolas, monospace;
+}
+
+.zhtac-zh {
+    color: var(--body-text-color-subdued, #666);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zhtac-hit {
+    font-size: 12px;
+    color: var(--color-accent, #6366f1);
+}
+
+.zhtac-count {
+    margin-left: auto;
+    padding-left: 12px;
+    font-size: 12px;
+    color: var(--body-text-color-subdued, #888);
+}
+
+.zhtac-preview {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.zhtac-translate {
+    flex: none;
+    padding: 1px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color-primary, #ccc);
+    background: var(--button-secondary-background-fill, #f3f4f6);
+    color: var(--body-text-color, #222);
+    cursor: pointer;
+}
+
+.zhtac-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-height: 72px;
+    overflow-y: auto;
+}
+
+.zhtac-chip {
+    padding: 0 6px;
+    font-size: 12px;
+    line-height: 20px;
+    border-radius: 10px;
+    background: var(--background-fill-secondary, #eef2ff);
+    color: var(--body-text-color, #333);
+}
+
+.zhtac-pending {
+    background: rgba(234, 138, 12, 0.18);
+    color: #c2410c;
+}
+
+.zhtac-unknown {
+    opacity: 0.55;
+}
