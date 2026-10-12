@@ -5,6 +5,8 @@ SD WebUI 中文标签补全扩展：在提示词框里**直接打中文**，弹�
 - 收录 Danbooru 图数 ≥50 的 **125,778** 个标签（2026-10 数据）
 - 每个标签带中文名与多个中文同义词，例如 `black_pantyhose` ← 黑色连裤袜 / 黑丝 / 黑色丝袜 / 黑裤袜…
 - 角色、作品支持译名、简称和社区昵称，例如 `saber_(fate)` ← 吾王 / 呆毛王 / 骑士王
+- 通用标签额外收录口语化说法，例如 `head_out_of_frame` ← 头部出画框 / 头部在画面外 / 没拍到头…；说法不完全一致时也会模糊匹配
+- 字典里没有的中文（包括整句描述）可用谷歌翻译或 DeepSeek 翻译成英文，适合 Anima 这类能理解自然语言的模型
 - 适用于 A1111 系 WebUI：Stable Diffusion WebUI、Forge、Forge Neo
 
 字典数据与制作脚本见 [danbooru-zh-dict](https://github.com/wangjue520/danbooru-zh-dict)。
@@ -30,7 +32,7 @@ git clone https://github.com/wangjue520/sd-webui-zh-tag-autocomplete
 
 在 GitHub 页面点「Code → Download ZIP」，解压到 WebUI 的 `extensions` 目录，确保结构为 `extensions/sd-webui-zh-tag-autocomplete/README.md`（不要多套一层文件夹），然后重启 WebUI。
 
-> 不需要安装任何 Python 依赖。
+> 不需要安装任何 Python 依赖。谷歌翻译需要 WebUI 所在机器能访问 Google（可在设置里填代理），也可以改用 DeepSeek。
 
 ---
 
@@ -62,7 +64,8 @@ masterpiece, 1girl, 黑丝
 | 鼠标点击 | 插入该标签 |
 | Ctrl+Enter | 照常生成图片（不被插件拦截） |
 
-- 候选按「完全匹配 → 开头匹配 → 包含」排序，同级按 Danbooru 图数从多到少排列
+- 候选按「完全匹配 → 开头匹配 → 包含 → 模糊匹配」排序，同级按 Danbooru 图数从多到少排列
+- 字典匹配不到或不够准时，会自动请求机器翻译（谷歌或 DeepSeek），出现一条青色「翻译」候选（如 `头部在画面外` → `head out of frame`）；译文正好是某个标签时，该标签会被置顶
 - 分类颜色：蓝 = 通用，绿 = 角色，紫 = 作品，橙 = 元标签，红 = 画师
 - 鼠标悬停在候选上可以看到该标签的中文说明
 - 输入英文也能补全，而且会匹配英文别名，例如 `miku` → `hatsune_miku`（装了 tagcomplete 时默认交给它处理，见下文设置）
@@ -83,7 +86,7 @@ black thighhighs, twintails, (hatsune miku:1.2), artoria pendragon \(fate\), <lo
 
 - 中文逗号 `，`、顿号 `、`、英文逗号 `,` 都可以作为分隔
 - 权重 `(xx:1.2)`、`[xx]`、`{xx}` 和 LoRA `<lora:…>` 保持不变
-- 匹配不到的中文原样保留，方便手动修改
+- 字典匹配不到的中文交给机器翻译，例如 `一个女孩坐在窗边看书` → `a girl sitting by the window reading a book`；关闭机器翻译或网络不通时原样保留，方便手动修改
 - 一个中文词对应多个标签时，取最常用（图数最多）的那个；需要别的标签时请用补全手动选
 
 ### 3. 中文预览
@@ -111,6 +114,11 @@ black thighhighs, twintails, (hatsune miku:1.2), artoria pendragon \(fate\), <lo
 | 候选中包含画师标签 | 开 | 画师标签只有原名，不翻译 |
 | 显示中文预览 | 开 | |
 | 一键翻译快捷键 | Alt+T | 可改为 `Ctrl+Shift+Y` 这类组合 |
+| 字典里没有的中文用机器翻译 | 开 | 由 WebUI 后端请求翻译，浏览器不直接访问 |
+| 翻译引擎 | 谷歌 | 谷歌：免费免 key 的网页接口（非官方，可能被限流）；DeepSeek：国内直连，懂提示词，倾向于直接给出 Danbooru 标签写法（如 `没拍到脚` → `feet out of frame`），按量计费但单次花费极低。DeepSeek 失败时自动改用谷歌 |
+| 谷歌翻译使用的代理 | 空 | 国内网络需填代理，如 `http://127.0.0.1:7890`；留空则使用系统环境变量 `HTTPS_PROXY` |
+| DeepSeek API Key | 空 | 留空则读环境变量 `DEEPSEEK_API_KEY`；Key 会保存在 WebUI 的 `config.json` 里 |
+| DeepSeek 接口地址 / 模型名 | `https://api.deepseek.com` / `deepseek-flash` | 也可填其他 OpenAI 兼容接口 |
 
 ---
 
@@ -138,6 +146,9 @@ black thighhighs, twintails, (hatsune miku:1.2), artoria pendragon \(fate\), <lo
 
 **和 tagcomplete 同时弹出两个候选框**
 把设置里的「输入英文时也弹出补全」设为「自动」或「关闭」。
+
+**没有「翻译」候选**
+翻译由 WebUI 后端请求。谷歌在国内需要在设置里填代理，或把翻译引擎换成 DeepSeek。失败时 WebUI 的命令行窗口会打印 `[zh-tag-autocomplete] …` 开头的错误信息。
 
 **翻译不准 / 想加自己的叫法**
 字典由大模型辅助生成，热门标签经过抽查，冷门角色可能有错。欢迎到 [danbooru-zh-dict](https://github.com/wangjue520/danbooru-zh-dict) 提 issue 或 PR。

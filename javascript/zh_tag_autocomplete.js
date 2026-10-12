@@ -82,28 +82,95 @@
                 }
                 out.push({ e, score, hit });
             }
+            if (out.length < limit) out.push(...fuzzySearch(query, new Set(out.map((r) => r.e)), includeArtists));
         } else {
             if (!englishSearchEnabled()) return [];
-            const q = query.toLowerCase().trim().replace(/\s+/g, "_").replace(/\\([()])/g, "$1");
-            if (!q) return [];
-            for (const e of entries) {
-                if (e.cat === 1 && !includeArtists) continue;
-                let score = 9, hit = "";
-                if (e.tagL === q) score = 0;
-                else if (e.tagL.startsWith(q)) score = 1;
-                else if (e.aliasL && ("|" + e.aliasL + "|").includes("|" + q + "|")) { score = 1; hit = q; }
-                else if (e.tagL.includes("_" + q) || e.tagL.includes("(" + q)) score = 2;
-                else if (e.aliasL && e.aliasL.includes(q)) {
-                    const a = e.alias.find((x) => x.toLowerCase().includes(q));
-                    const al = a ? a.toLowerCase() : "";
-                    score = al === q ? 1 : al.startsWith(q) ? 2 : 3;
-                    hit = a || "";
-                } else if (q.length >= 3 && e.tagL.includes(q)) score = 3;
-                if (score < 9) out.push({ e, score, hit });
-            }
+            out.push(...searchEnglish(query, includeArtists));
         }
         out.sort((a, b) => a.score - b.score || b.e.count - a.e.count);
         return out.slice(0, limit);
+    }
+
+    // 模糊匹配：子串找不到时（如“头部在画面外” vs “头部出画框”），按字与相邻两字的重合度打分
+    function fuzzySearch(query, exclude, includeArtists) {
+        const q = query.trim();
+        if (q.length < 3) return [];
+        const grams = [...new Set(Array.from({ length: q.length - 1 }, (_, i) => q.slice(i, i + 2)))];
+        const chars = [...new Set(q)];
+        const out = [];
+        for (const e of entries) {
+            if (exclude.has(e) || !e.zhAll || (e.cat === 1 && !includeArtists)) continue;
+            if (!grams.some((g) => e.zhAll.includes(g))) continue; // 快速排除
+            let best = 0, hit = "";
+            for (const t of [e.zh, ...e.syn]) {
+                if (!t) continue;
+                const gc = grams.filter((g) => t.includes(g)).length / grams.length;
+                const cc = chars.filter((c) => t.includes(c)).length / chars.length;
+                // 词本身也要大部分被查询覆盖，避免长词因包含常见字而入选
+                const back = [...new Set(t)].filter((c) => q.includes(c)).length / new Set(t).size;
+                const s = (gc + cc + back) / 3;
+                if (s > best) { best = s; hit = t; }
+            }
+            if (best >= 0.5) out.push({ e, score: 5 - best, hit });
+        }
+        return out;
+    }
+
+    function searchEnglish(query, includeArtists) {
+        const out = [];
+        const q = query.toLowerCase().trim().replace(/\s+/g, "_").replace(/\\([()])/g, "$1");
+        if (!q) return out;
+        for (const e of entries) {
+            if (e.cat === 1 && !includeArtists) continue;
+            let score = 9, hit = "";
+            if (e.tagL === q) score = 0;
+            else if (e.tagL.startsWith(q)) score = 1;
+            else if (e.aliasL && ("|" + e.aliasL + "|").includes("|" + q + "|")) { score = 1; hit = q; }
+            else if (e.tagL.includes("_" + q) || e.tagL.includes("(" + q)) score = 2;
+            else if (e.aliasL && e.aliasL.includes(q)) {
+                const a = e.alias.find((x) => x.toLowerCase().includes(q));
+                const al = a ? a.toLowerCase() : "";
+                score = al === q ? 1 : al.startsWith(q) ? 2 : 3;
+                hit = a || "";
+            } else if (q.length >= 3 && e.tagL.includes(q)) score = 3;
+            if (score < 9) out.push({ e, score, hit });
+        }
+        return out;
+    }
+
+    // ---------- 谷歌翻译（经后端转发） ----------
+
+    const gtCache = new Map(); // 中文 → Promise<译文|null>
+    const gtDone = new Map(); // 中文 → 译文（已完成的，供同步读取）
+
+    function googleTranslate(text) {
+        text = text.trim();
+        if (!text || !opt("zhtac_google_translate", true)) return Promise.resolve(null);
+        if (gtCache.has(text)) return gtCache.get(text);
+        const p = fetch(`/zh_tag_autocomplete/translate?q=${encodeURIComponent(text)}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j) => {
+                const t = j && j.text ? j.text.trim().replace(/[.。]+$/, "").toLowerCase() : null;
+                if (t) gtDone.set(text, t);
+                else gtCache.delete(text); // 失败不缓存，下次重试
+                return t;
+            })
+            .catch(() => { gtCache.delete(text); return null; });
+        gtCache.set(text, p);
+        return p;
+    }
+
+    // 译文 → 标签：译文恰好是标签/别名时（如 "head out of frame"）直接用标签
+    function tagForEnglish(en) {
+        const e = byTag.get(normalizeTag(en));
+        if (e) return e;
+        const r = searchEnglish(en, true).filter((x) => x.score === 0 || (x.score === 1 && x.hit))
+            .sort((a, b) => a.score - b.score || b.e.count - a.e.count)[0];
+        return r ? r.e : null;
+    }
+
+    function formatPhrase(text) {
+        return opt("zhtac_escape_parentheses", true) ? text.replace(/([()])/g, "\\$1") : text;
     }
 
     // 已装 tagcomplete 时英文补全交给它，避免两个弹窗抢 Enter/Tab
@@ -194,7 +261,14 @@
         const p = ensurePopup();
         if (!state.results.length) return hidePopup();
         p.innerHTML = state.results
-            .map(({ e, hit }, i) => {
+            .map(({ e, hit, gt, src }, i) => {
+                if (gt) {
+                    return `<div class="zhtac-item${i === state.index ? " zhtac-active" : ""}" data-i="${i}" title="谷歌翻译，插入译文原文">
+                        <span class="zhtac-cat zhtac-cat-gt">翻译</span>
+                        <span class="zhtac-tag">${escapeHtml(gt)}</span>
+                        <span class="zhtac-zh">${escapeHtml(src)}</span>
+                    </div>`;
+                }
                 const extra = hit && hit !== e.zh ? `<span class="zhtac-hit">≈${escapeHtml(hit)}</span>` : "";
                 const title = e.note ? ` title="${escapeHtml(e.note)}"` : "";
                 return `<div class="zhtac-item${i === state.index ? " zhtac-active" : ""}" data-i="${i}"${title}>
@@ -260,7 +334,7 @@
         const ta = state.textarea;
         if (!r || !ta) return;
         const text = ta.value;
-        let insert = formatTag(r.e.tag);
+        let insert = r.gt ? formatPhrase(r.gt) : formatTag(r.e.tag);
         let after = text.slice(state.tokenEnd);
         // 吃掉光标后同一词的剩余部分
         const rest = after.match(/^[^,，、\n()\[\]{}:<>]*/)[0];
@@ -274,7 +348,8 @@
 
     // ---------- 一键翻译 ----------
 
-    function translateText(text) {
+    // 字典优先；查不到的中文用 translations（中文 → 译文）替换，没有译文则原样保留
+    function translateText(text, translations = gtDone) {
         return text
             .split("\n")
             .map((line) => {
@@ -284,8 +359,13 @@
                     .map((seg) => {
                         if (!CJK.test(seg) || /<[^>]*>/.test(seg)) return seg.trim();
                         const [pre, core, post] = splitWeight(seg);
-                        const e = bestTagFor(core.trim().replace(PINYIN_RESIDUE, ""));
-                        return e ? (pre + formatTag(e.tag) + post).trim() : seg.trim();
+                        const term = core.trim().replace(PINYIN_RESIDUE, "");
+                        const e = bestTagFor(term);
+                        if (e) return (pre + formatTag(e.tag) + post).trim();
+                        const en = translations.get(term);
+                        if (!en) return seg.trim();
+                        const te = tagForEnglish(en);
+                        return (pre + (te ? formatTag(te.tag) : formatPhrase(en)) + post).trim();
                     })
                     .filter((s, i, arr) => s || i < arr.length - 1)
                     .join(", ");
@@ -293,10 +373,23 @@
             .join("\n");
     }
 
+    // 字典里找不到的中文片段（送去谷歌翻译）
+    function untranslatedTerms(text) {
+        const out = new Set();
+        for (const seg of text.split(/[,，、\n]/)) {
+            if (!CJK.test(seg) || /<[^>]*>/.test(seg)) continue;
+            const term = splitWeight(seg)[1].trim().replace(PINYIN_RESIDUE, "");
+            if (term && !bestTagFor(term)) out.add(term);
+        }
+        return [...out];
+    }
+
     async function translateTextarea(textarea) {
         await loadData();
         if (!entries) return;
         const v = textarea.value;
+        await Promise.all(untranslatedTerms(v).map(googleTranslate));
+        if (textarea.value !== v) return; // 等翻译期间用户又改了内容，放弃本次
         const t = translateText(v);
         if (t !== v) setValue(textarea, t, t.length);
     }
@@ -326,7 +419,8 @@
             if (!core || core.toUpperCase() === "BREAK") continue;
             if (CJK.test(core)) {
                 const e = bestTagFor(core);
-                chips.push(`<span class="zhtac-chip zhtac-pending" title="点“中→英”或按 ${escapeHtml(opt("zhtac_translate_hotkey", "Alt+T"))} 转换">${escapeHtml(core)} → ${e ? escapeHtml(e.tag) : "?"}</span>`);
+                const target = e ? e.tag : gtDone.get(core) || (opt("zhtac_google_translate", true) ? "谷歌翻译" : "?");
+                chips.push(`<span class="zhtac-chip zhtac-pending" title="点“中→英”或按 ${escapeHtml(opt("zhtac_translate_hotkey", "Alt+T"))} 转换">${escapeHtml(core)} → ${escapeHtml(target)}</span>`);
             } else {
                 const e = byTag.get(normalizeTag(core));
                 if (e && e.zh) chips.push(`<span class="zhtac-chip" title="${escapeHtml(e.note || e.tag)}">${escapeHtml(e.zh)}</span>`);
@@ -351,10 +445,32 @@
             state.textarea = textarea;
             state.tokenStart = tok.start;
             state.tokenEnd = tok.end;
-            state.results = search(tok.text, opt("zhtac_max_results", 12));
+            const limit = opt("zhtac_max_results", 12);
+            state.results = search(tok.text, limit);
             state.index = 0;
             renderPopup();
+            if (CJK.test(tok.text)) addTranslation(textarea, tok.text.trim(), limit);
         }, 60);
+    }
+
+    // 谷歌译文异步返回后并入候选：译文本身是标签时置顶该标签，另附一条“翻译”候选插入译文原文
+    function addTranslation(textarea, query, limit) {
+        googleTranslate(query).then((en) => {
+            if (!en || state.textarea !== textarea) return;
+            const tok = currentToken(textarea);
+            if (!tok || tok.text.trim() !== query || document.activeElement !== textarea) return;
+            const results = state.results.filter((r) => !r.gt);
+            const te = tagForEnglish(en);
+            if (te && !results.some((r) => r.e === te)) results.unshift({ e: te, score: 0, hit: `译:${en}` });
+            const gtItem = { gt: en, src: query };
+            if (!te || normalizeTag(en) !== te.tag) {
+                const strong = results.some((r) => r.score <= 1);
+                if (strong) results.splice(Math.min(results.length, limit - 1), 0, gtItem);
+                else results.unshift(gtItem);
+            }
+            state.results = results.slice(0, limit);
+            renderPopup();
+        });
     }
 
     function hotkeyMatches(ev) {
@@ -457,5 +573,5 @@
     else document.addEventListener("DOMContentLoaded", install);
 
     // 供调试/其他脚本使用
-    window.zhTagAutocomplete = { search, translateText, loadData };
+    window.zhTagAutocomplete = { search, translateText, loadData, googleTranslate, untranslatedTerms };
 })();
